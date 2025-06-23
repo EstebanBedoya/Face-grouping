@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+ENV/
+*.sqlite3
+
+# FastAPI/DeepFace
+processing_results.json
+grouped_photos/
+input_photos/
+
+# VSCode/IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db 

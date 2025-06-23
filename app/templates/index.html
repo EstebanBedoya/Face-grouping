@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Grouping MVP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">🤖 Face Grouping MVP</h1>
+            <p class="text-gray-600">Agrupa fotos por rostro automáticamente usando IA</p>
+        </div>
+
+        <!-- Status Card -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">📊 Estado del Sistema</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4" id="statusGrid">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <div class="text-2xl font-bold text-blue-600" id="inputCount">{{ input_count }}</div>
+                    <div class="text-sm text-blue-800">Imágenes Subidas</div>
+                </div>
+                <div class="bg-green-50 p-4 rounded-lg">
+                    <div class="text-2xl font-bold text-green-600" id="groupCount">{{ groups|length }}</div>
+                    <div class="text-sm text-green-800">Grupos Creados</div>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg">
+                    <div class="text-2xl font-bold text-purple-600" id="groupedCount">
+                        {% set total_grouped = 0 %}
+                        {% for group in groups %}
+                            {% set total_grouped = total_grouped + group.count %}
+                        {% endfor %}
+                        {{ total_grouped }}
+                    </div>
+                    <div class="text-sm text-purple-800">Imágenes Agrupadas</div>
+                </div>
+                <div class="bg-orange-50 p-4 rounded-lg">
+                    <div class="text-2xl font-bold text-orange-600" id="hasResults">
+                        {{ "Sí" if processing_info else "No" }}
+                    </div>
+                    <div class="text-sm text-orange-800">Procesamiento</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">📤 Imágenes para Procesar</h2>
+            
+            {% if input_images %}
+                <!-- Gallery of uploaded images -->
+                <div class="mb-6">
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4" id="imageGallery">
+                        {% for image in input_images %}
+                        <div class="relative group">
+                            <div class="aspect-square bg-gray-200 rounded-lg overflow-hidden">
+                                <img src="{{ image.path }}" 
+                                     alt="{{ image.filename }}"
+                                     class="w-full h-full object-cover hover:scale-105 transition duration-200 cursor-pointer"
+                                     onclick="openImageModal('{{ image.path }}', '{{ image.filename }}')">
+                            </div>
+                            <!-- Delete button -->
+                            <button onclick="deleteInputImage('{{ image.filename }}')" 
+                                    class="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition duration-200"
+                                    title="Eliminar imagen">
+                                ✕
+                            </button>
+                            <!-- Filename tooltip -->
+                            <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white text-xs p-1 rounded-b-lg opacity-0 group-hover:opacity-100 transition duration-200 truncate">
+                                {{ image.filename }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        <!-- Add more button -->
+                        <div class="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center hover:border-blue-500 hover:bg-blue-50 transition duration-200 cursor-pointer"
+                             onclick="document.getElementById('fileInput').click()">
+                            <div class="text-center">
+                                <div class="text-3xl text-gray-400 mb-1">+</div>
+                                <div class="text-xs text-gray-500">Agregar más</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-sm text-gray-600 text-center">
+                        {{ input_count }} imagen{{ "es" if input_count != 1 else "" }} lista{{ "s" if input_count != 1 else "" }} para procesar
+                        • <button onclick="showUploadZone()" class="text-blue-600 hover:text-blue-800 underline">Cambiar a zona de subida</button>
+                    </div>
+                </div>
+            {% else %}
+                <!-- Empty state with drag & drop zone -->
+                <div id="emptyUploadZone">
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center" id="dropZone">
+                        <div class="text-gray-500 mb-4">
+                            <svg class="mx-auto h-12 w-12" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </div>
+                        <p class="text-lg text-gray-600 mb-2">Arrastra y suelta imágenes aquí</p>
+                        <p class="text-sm text-gray-500 mb-4">o</p>
+                        <button type="button" onclick="document.getElementById('fileInput').click()" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                            Seleccionar Archivos
+                        </button>
+                        <p class="text-xs text-gray-400 mt-2">Formatos soportados: JPG, PNG, BMP, TIFF, WebP</p>
+                    </div>
+                </div>
+            {% endif %}
+            
+            <!-- Hidden upload zone for when images exist -->
+            <div id="hiddenUploadZone" class="hidden">
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center" id="dropZoneHidden">
+                    <p class="text-gray-600 mb-3">Arrastra más imágenes aquí o</p>
+                    <button type="button" onclick="document.getElementById('fileInput').click()" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                        Seleccionar Más Archivos
+                    </button>
+                    <div class="mt-3">
+                        <button onclick="hideUploadZone()" class="text-gray-500 hover:text-gray-700 underline text-sm">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Hidden file input -->
+            <input type="file" id="fileInput" name="files" multiple accept="image/*" class="hidden">
+            
+            <!-- Upload Progress -->
+            <div id="uploadProgress" class="hidden mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Progreso de subida</span>
+                    <span class="text-sm text-gray-500" id="uploadPercent">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" id="uploadBar" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Process Button -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">⚙️ Procesar Imágenes</h2>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button id="processBtn" onclick="processImages()" class="bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-6 rounded-lg transition duration-200 flex-1">
+                    🚀 Iniciar Agrupación por Rostros
+                </button>
+                <button onclick="clearAll()" class="bg-red-500 hover:bg-red-600 text-white font-medium py-3 px-6 rounded-lg transition duration-200">
+                    🗑️ Limpiar Todo
+                </button>
+            </div>
+            
+            <!-- Processing Status -->
+            <div id="processingStatus" class="hidden mt-4 p-4 bg-blue-50 rounded-lg">
+                <div class="flex items-center">
+                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-3"></div>
+                    <span class="text-blue-800">Procesando imágenes... Esto puede tardar varios minutos.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="bg-white rounded-lg shadow-md p-6" id="resultsSection">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-gray-800">📁 Resultados</h2>
+                {% if processing_info %}
+                <div class="text-sm text-gray-600">
+                    Último procesamiento: {{ processing_info.stats.processed }} imágenes en {{ processing_info.stats.groups_created }} grupos
+                </div>
+                {% endif %}
+            </div>
+            
+            <div id="resultsContent">
+                {% if groups %}
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {% for group in groups %}
+                        <div class="border rounded-lg p-4 hover:shadow-md transition duration-200">
+                            <div class="flex justify-between items-start mb-3">
+                                <h3 class="font-semibold text-lg text-gray-800">{{ group.name }}</h3>
+                                <a href="/download/{{ group.name }}" 
+                                   class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition duration-200"
+                                   title="Descargar ZIP">
+                                    📥 ZIP
+                                </a>
+                            </div>
+                            
+                            <p class="text-gray-600 mb-3">{{ group.count }} imágenes</p>
+                            
+                            <!-- Image Gallery -->
+                            <div class="grid grid-cols-3 gap-2 mb-3">
+                                {% for image in group.images[:6] %}
+                                <div class="aspect-square bg-gray-200 rounded overflow-hidden">
+                                    <img src="/image/{{ group.name }}/{{ image }}" 
+                                         alt="{{ image }}"
+                                         class="w-full h-full object-cover hover:scale-105 transition duration-200 cursor-pointer"
+                                         onclick="openImageModal('/image/{{ group.name }}/{{ image }}', '{{ image }}')">
+                                </div>
+                                {% endfor %}
+                                {% if group.count > 6 %}
+                                <div class="aspect-square bg-gray-100 rounded flex items-center justify-center text-gray-500 text-sm">
+                                    +{{ group.count - 6 }} más
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="text-xs text-gray-500">
+                                <strong>Archivos:</strong><br>
+                                {{ group.images[:3]|join(', ') }}
+                                {% if group.images|length > 3 %} y {{ group.images|length - 3 }} más...{% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-gray-500 text-center py-8">No hay resultados disponibles. Sube imágenes y procesa para ver los grupos.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para ver imágenes -->
+    <div id="imageModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onclick="closeImageModal()">
+        <div class="relative max-w-4xl max-h-full p-4">
+            <img id="modalImage" src="" alt="" class="max-w-full max-h-full object-contain">
+            <button onclick="closeImageModal()" class="absolute top-2 right-2 bg-white text-black rounded-full w-8 h-8 flex items-center justify-center hover:bg-gray-200">
+                ✕
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let uploadedFiles = [];
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            setupFileUpload();
+        });
+
+        // Setup file upload functionality
+        function setupFileUpload() {
+            const dropZone = document.getElementById('dropZone');
+            const dropZoneHidden = document.getElementById('dropZoneHidden');
+            const fileInput = document.getElementById('fileInput');
+
+            // Setup drag and drop for both zones
+            [dropZone, dropZoneHidden].forEach(zone => {
+                if (zone) {
+                    zone.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        zone.classList.add('border-blue-500', 'bg-blue-50');
+                    });
+
+                    zone.addEventListener('dragleave', (e) => {
+                        e.preventDefault();
+                        zone.classList.remove('border-blue-500', 'bg-blue-50');
+                    });
+
+                    zone.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        zone.classList.remove('border-blue-500', 'bg-blue-50');
+                        const files = Array.from(e.dataTransfer.files);
+                        handleFiles(files);
+                    });
+                }
+            });
+
+            // File input change
+            if (fileInput) {
+                fileInput.addEventListener('change', (e) => {
+                    const files = Array.from(e.target.files);
+                    handleFiles(files);
+                });
+            }
+        }
+
+        // Show/hide upload zone functions
+        function showUploadZone() {
+            document.getElementById('hiddenUploadZone').classList.remove('hidden');
+        }
+
+        function hideUploadZone() {
+            document.getElementById('hiddenUploadZone').classList.add('hidden');
+        }
+
+        // Delete individual input image
+        async function deleteInputImage(filename) {
+            if (!confirm(`¿Estás seguro de que quieres eliminar "${filename}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await axios.delete(`/input_image/${filename}`);
+                
+                if (response.data.success) {
+                    showNotification(`✅ Imagen "${filename}" eliminada`, 'success');
+                    // Reload page to refresh the gallery
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                showNotification('❌ Error al eliminar la imagen', 'error');
+            }
+        }
+
+        // Handle file upload
+        async function handleFiles(files) {
+            const imageFiles = files.filter(file => file.type.startsWith('image/'));
+            
+            if (imageFiles.length === 0) {
+                alert('Por favor selecciona solo archivos de imagen.');
+                return;
+            }
+
+            const formData = new FormData();
+            imageFiles.forEach(file => {
+                formData.append('files', file);
+            });
+
+            // Show upload progress
+            const progressDiv = document.getElementById('uploadProgress');
+            const progressBar = document.getElementById('uploadBar');
+            const progressPercent = document.getElementById('uploadPercent');
+            
+            progressDiv.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            progressPercent.textContent = '0%';
+
+            try {
+                const response = await axios.post('/upload', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    },
+                    onUploadProgress: (progressEvent) => {
+                        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                        progressBar.style.width = percentCompleted + '%';
+                        progressPercent.textContent = percentCompleted + '%';
+                    }
+                });
+
+                if (response.data.total_uploaded > 0) {
+                    uploadedFiles = uploadedFiles.concat(response.data.uploaded);
+                    showNotification(`✅ ${response.data.total_uploaded} archivos subidos exitosamente`, 'success');
+                    
+                    // Reload page to show new images in gallery
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500);
+                }
+
+                if (response.data.errors.length > 0) {
+                    showNotification(`⚠️ ${response.data.errors.length} errores durante la subida`, 'warning');
+                }
+
+            } catch (error) {
+                console.error('Upload error:', error);
+                showNotification('❌ Error al subir archivos', 'error');
+            } finally {
+                // Hide progress after a delay
+                setTimeout(() => {
+                    progressDiv.classList.add('hidden');
+                }, 2000);
+            }
+        }
+
+        // Process images
+        async function processImages() {
+            const processBtn = document.getElementById('processBtn');
+            const processingStatus = document.getElementById('processingStatus');
+            
+            processBtn.disabled = true;
+            processBtn.textContent = '⏳ Procesando...';
+            processingStatus.classList.remove('hidden');
+
+            try {
+                const response = await axios.post('/process');
+                
+                if (response.data.success) {
+                    showNotification('✅ Procesamiento completado exitosamente', 'success');
+                    // Reload page to show results
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Processing error:', error);
+                showNotification('❌ Error durante el procesamiento: ' + (error.response?.data?.detail || error.message), 'error');
+            } finally {
+                processBtn.disabled = false;
+                processBtn.textContent = '🚀 Iniciar Agrupación por Rostros';
+                processingStatus.classList.add('hidden');
+            }
+        }
+
+        // Clear all data
+        async function clearAll() {
+            if (!confirm('¿Estás seguro de que quieres limpiar todos los datos?')) {
+                return;
+            }
+
+            try {
+                await axios.delete('/clear');
+                uploadedFiles = [];
+                showNotification('✅ Todos los datos han sido limpiados', 'success');
+                
+                // Reload page
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } catch (error) {
+                console.error('Error clearing data:', error);
+                showNotification('❌ Error al limpiar datos', 'error');
+            }
+        }
+
+        // Image modal functions
+        function openImageModal(imageSrc, altText) {
+            const modal = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            modalImage.src = imageSrc;
+            modalImage.alt = altText;
+            modal.classList.remove('hidden');
+        }
+
+        function closeImageModal() {
+            const modal = document.getElementById('imageModal');
+            modal.classList.add('hidden');
+        }
+
+        // Show notification
+        function showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 transition-all duration-300 transform translate-x-full`;
+            
+            // Set colors based on type
+            switch (type) {
+                case 'success':
+                    notification.className += ' bg-green-500 text-white';
+                    break;
+                case 'error':
+                    notification.className += ' bg-red-500 text-white';
+                    break;
+                case 'warning':
+                    notification.className += ' bg-yellow-500 text-white';
+                    break;
+                default:
+                    notification.className += ' bg-blue-500 text-white';
+            }
+            
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            // Animate in
+            setTimeout(() => {
+                notification.classList.remove('translate-x-full');
+            }, 100);
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    if (document.body.contains(notification)) {
+                        document.body.removeChild(notification);
+                    }
+                }, 300);
+            }, 5000);
+        }
+    </script>
+</body>
+</html> 
