@@ -15,7 +15,7 @@ from .grouping import group_faces
 app = FastAPI(title="Face Grouping MVP", description="Agrupa fotos por rostro automáticamente")
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+# app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Templates
 templates = Jinja2Templates(directory="app/templates")
